@@ -25,26 +25,110 @@
 #define MAX_TERRITORIOS 5
 #define TAM_NOME 30
 #define TAM_COR 10
+#define TAM_MISSAO 60
+#define MAX_MISSOES 3
 // --- Estrutura de Dados ---
 // Define a estrutura para um território, contendo seu nome, a cor do exército que o domina e o número de tropas.
 struct Territorio {
-    char nome[30];
-    char cor[10];
+    char nome[TAM_NOME];
+    char cor[TAM_COR];
     int tropas;
 };
 
 struct Territorio *war;
+
+struct Mission{
+    char tropa[TAM_COR];
+    char missao[TAM_MISSAO];
+    int totalVitorias;
+};
+
+struct Mission *missao;
+
 // --- Protótipos das Funções ---
 // Aloca dinamicamente a memória para o vetor de territórios usando calloc.
 // Retorna um ponteiro para a memória alocada ou NULL em caso de falha. 
-
+void exibirMenu();
 void limparBufferEntrada();
-void simularAtaque(int at, int df);
 void pausa();
-void simularAtaque(int at, int df);
+void cadastrarTropas();
+void exibirMissao(struct Mission *missao);
+void faseDeAtaque();
+void simularAtaque(int at, int df, int *totalVitorias);
+void alocarMapa();
+void alocarMissao();
+void exibirMapa();
+void atribuirMissao(struct Mission *missao, char* destino, char* missoes[], int exercito);
+void liberarMemoria(struct Territorio *war, struct Mission *missao);
+int verificarMissao(char* missoes[], struct Territorio *war, int *totalVitorias);
+
+// Funções de lógica principal do jogo:
+// Função utilitária:
+
+// --- Função Principal (main) ---
+// Função principal que orquestra o fluxo do jogo, chamando as outras funções em ordem.
+int main() {
+    // - Define o locale para português.
+    setlocale(LC_ALL, "Portuguese");
+    // - Inicializa a semente para geração de números aleatórios com base no tempo atual.
+    srand(time(NULL));
+    
+    alocarMapa();
+
+    cadastrarTropas();
+
+    alocarMissao();
+    
+    int exercito = rand() % MAX_TERRITORIOS;
+    char * missoes[MAX_MISSOES] = { "Conquistar 1 territorio",
+                        "Eliminar todas a tropas do exército %s",
+                        "Não perder durante 4 batalhas"
+    };
+    
+    atribuirMissao(missao, war[exercito].nome, missoes, exercito);
+
+    int opc;
+    do {
+        exibirMapa(war);
+        exibirMissao(missao);
+        exibirMenu();
+        scanf("%d", &opc);
+        limparBufferEntrada();
+
+        switch(opc) {
+            case 1: //ATACAR
+                faseDeAtaque();
+                break;
+
+            case 2: //VERIFICAR MISSAO
+                if (verificarMissao(missoes, war, &missao[0].totalVitorias)) {
+                    printf("\nPARABÉNS!! VOCÊ CONCLUIU SUA MISSÃO!!\n");
+                    break;
+                } else {
+                    printf("\nVocê ainda não concluiu sua missão! Volte para a batalha!\n\n");
+                }
+
+            case 0: //SAIR
+
+        }
+    } while (opc != 0);
+    
+    printf("Jogo encerrado e memoria liberada. Até a próxima!\n");
+
+    liberarMemoria(war, missao);
+
+    return 0;
+}
 
 
+void exibirMenu() {
+    printf("\n--- MENU DE ACOES ---\n");
+    printf("[1] ATACAR\n");
+    printf("[2] VERIFICAR MISSAO\n");
+    printf("[0] SAIR\n>>>> ");
+}
 
+// --- Implementação das Funções ---
 void alocarMapa(){
     war = (struct Territorio*) calloc (MAX_TERRITORIOS, sizeof(struct Territorio));
     //Verifica se a alocação foi bem-sucedida.
@@ -52,12 +136,15 @@ void alocarMapa(){
         printf("Erro: Falha ao alocar memória");
     };
 }
-    
+
+void alocarMissao(){
+    missao = (struct Mission*) calloc (1, sizeof(struct Mission));
+}
 // Declarações antecipadas de todas as funções que serão usadas no programa, organizadas por categoria.
 
 // Mostra o estado atual de todos os territórios no mapa, formatado como uma tabela.
 // Usa 'const' para garantir que a função apenas leia os dados do mapa, sem modificá-los.
-void exibirMapa(){
+void exibirMapa(const struct Territorio *war){
     printf("=============================================\n");
     printf("        MAPA DO MUNDO - ESTADO ATUAL\n");
     printf("=============================================\n");
@@ -68,105 +155,7 @@ void exibirMapa(){
     printf("\n");
 }
 
-// Gerencia a interface para a ação de ataque, solicitando ao jogador os territórios de origem e destino.
-// Chama a função simularAtaque() para executar a lógica da batalha.
-void faseDeAtaque(){
-    int atacante;
-    int defensor;
-    do {
-        exibirMapa();
-        printf("\n--- FASE DE ATAQUE ---\n");
-        int go = 0;
-        do {
-            printf("Escolha o territorio atacante (1 a 5, ou 0 para sair): ");
-            scanf("%d", &atacante);
-            limparBufferEntrada();
-            if (atacante == 0){
-                return;
-            }
-            if (atacante < 1 || atacante > 6){
-                printf("Erro! Digite uma opção válida!\n");
-                go = 1;
-            } else {
-                go = 0;
-            }
-        } while (go);
-
-        do {
-            printf("Escolha o territorio defensor (1 a 5): ");
-            scanf("%d", &defensor);
-            limparBufferEntrada();
-            if (defensor < 1 || defensor > 6){
-                printf("Erro! Digite uma opção válida!\n");
-                go = 1;
-            } else {
-                go = 0;
-            }
-
-        } while (go);
-
-        simularAtaque(atacante - 1, defensor - 1);
-    } while (atacante != 0);
-}
-
-
-// Executa a lógica de uma batalha entre dois territórios.
-// Realiza validações, rola os dados, compara os resultados e atualiza o número de tropas.
-// Se um território for conquistado, atualiza seu dono e move uma tropa.
-void simularAtaque(int at, int df){
-    int dado1 = (rand() % 6) + 1;
-    printf("O atacante %s rolou o dado e tirou: %d\n", war[at].nome, dado1);
-
-    int dado2 = (rand() % 6) + 1;
-    printf("O defensor %s rolou o dado e tirou: %d\n", war[df].nome, dado2);
-
-    if (dado1 > dado2) {
-        printf("VITORIA DO ATAQUE! O defensor perdeu uma tropa.\n");
-        war[df].tropas--;
-
-        if (war[df].tropas == 0){
-            printf("CONQUISTA! O territorio %s foi dominado pelo Exercito %s\n", war[df].nome, war[at].cor);
-            strcpy(war[df].cor, war[at].cor);
-            war[df].tropas++;
-            war[at].tropas--;
-        } 
-    }
-
-    else if (dado1 < dado2) {
-        printf("ATAQUE NEUTRALIZADO! O defensor venceu essa batalha!");
-    }
-
-    else {
-        printf("EMPATE! Os exercitos não se confrontaram!");
-    }
-    pausa();
-}
-
-// Funções de setup e gerenciamento de memória:
-void limparBufferEntrada(){
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF);
-}
-// Funções de interface com o usuário:
-void pausa() {
-    printf("\nPressione ENTER para continuar...\n\n");
-    getchar();
-}
-
-// Funções de lógica principal do jogo:
-// Função utilitária:
-
-// --- Função Principal (main) ---
-// Função principal que orquestra o fluxo do jogo, chamando as outras funções em ordem.
-int main() {
-    // 1. Configuração Inicial (Setup):
-    // - Define o locale para português.
-    setlocale(LC_ALL, "Portuguese");
-    // - Inicializa a semente para geração de números aleatórios com base no tempo atual.
-    srand(time(NULL));
-    
-    alocarMapa();
-
+void cadastrarTropas() {
     int totalTropas = 0;
     // - Preenche os territórios com seus dados iniciais (tropas, donos, etc.).
     printf("\n========================================================\n\n");
@@ -190,62 +179,177 @@ int main() {
 
         totalTropas++;
 
-    } while (totalTropas < 5);
+    } while (totalTropas < MAX_TERRITORIOS);
 
     printf("\nCadastro inicial concluído com sucesso!\n\n");
-
-    pausa();
-
-    faseDeAtaque();
-
-    // - Define a cor do jogador e sorteia sua missão secreta.
-    // 2. Laço Principal do Jogo (Game Loop):
-    // - Roda em um loop 'do-while' que continua até o jogador sair (opção 0) ou vencer
-    // - A cada iteração, exibe o mapa, a missão e o menu de ações.
-    // - Lê a escolha do jogador e usa um 'switch' para chamar a função apropriada:
-    //   - Opção 1: Inicia a fase de ataque.
-    //   - Opção 2: Verifica se a condição de vitória foi alcançada e informa o jogador.
-    //   - Opção 0: Encerra o jogo.
-    // - Pausa a execução para que o jogador possa ler os resultados antes da próxima rodada.
-
-    // exibirMenuPrincipal():
-    // Imprime na tela o menu de ações disponíveis para o jogador.
-    
-    // 3. Limpeza:
-    // - Ao final do jogo, libera a memória alocada para o mapa para evitar vazamentos de memória.
-    free(war);
-    printf("Jogo encerrado e memoria liberada. Até a próxima!\n");
-
-    return 0;
 }
 
-// --- Implementação das Funções ---
+void atribuirMissao(struct Mission *missao, char* destino, char* missoes[], int exercito) {
+        int missaoIndex = rand() % MAX_MISSOES; //Para sortear a missão.
+        int cor;
+        do {
+            cor = rand() % MAX_TERRITORIOS; //Para sortear a tropa em caso da missão[1].
+        } while (cor == exercito);
+
+        switch (missaoIndex) {
+            case 0:
+                sprintf(missao[0].missao, "%s", missoes[0]);
+                break;
+            case 1:
+                sprintf(missao[0].missao,missoes[1], war[cor].cor); // Atribui a missao ao jogador
+                break;      
+            case 2:
+                sprintf(missao[0].missao, "%s", missoes[2]);
+                break;
+        }
+        sprintf(missao[0].tropa, "%s", war[exercito].cor);
+}
+
+void exibirMissao(struct Mission *missao){
+    printf("--- SUA MISSAO (Exercito %s) ---\n", missao[0].tropa);
+    printf("%s\n", missao[0].missao);
+}
+
+int verificarMissao(char* missoes[], struct Territorio* war, int *totalVitorias) {
+    int tipo = -1;
+
+    if (strstr(missao[0].missao, "Conquistar 1 territorio"))
+        tipo = 0;
+    else if (strstr(missao[0].missao, "Eliminar todas a tropas"))
+        tipo = 1;
+    else if (strstr(missao[0].missao, "Não perder durante 4 batalhas"))
+        tipo = 2;
+
+    switch (tipo) {
+        case 0: {
+            int conta = 0;
+            for (int c = 0; c < MAX_TERRITORIOS; c++) {
+                if (strcmp(missao[0].tropa, war[c].cor) == 0)
+                    conta++;
+            }
+            return conta > 1; // conquistou mais de 1 território
+        }
+
+        case 1: {
+            // pegar a última palavra (cor alvo)
+            char *ultima = strrchr(missao[0].missao, ' ');
+            if (!ultima) return 0;
+            ultima++; // pular o espaço
+
+            // remover \n ou \r no final (caso exista)
+            ultima[strcspn(ultima, "\r\n")] = '\0';
+
+            int existe = 0;
+            for (int c = 0; c < MAX_TERRITORIOS; c++) {
+                if (strcmp(ultima, war[c].cor) == 0) {
+                    existe = 1;
+                    break;
+                }
+            }
+
+            return !existe; // missão cumprida se o exército alvo foi eliminado
+        }
+
+        case 2:
+            return *totalVitorias >= 4;
+
+        default:
+            return 0;
+    }
+}
 
 
+// Gerencia a interface para a ação de ataque, solicitando ao jogador os territórios de origem e destino.
+// Chama a função simularAtaque() para executar a lógica da batalha.
+void faseDeAtaque(){
+    int atacante;
+    int defensor;
+    
+    printf("\n--- FASE DE ATAQUE ---\n");
+    int go = 0;
+    do {
+        printf("Escolha o territorio atacante (1 a 5)\n");
+        scanf("%d", &atacante);
+        limparBufferEntrada();
+        if (atacante < 1 || atacante > 6){
+            printf("Erro! Digite uma opção válida!\n");
+            go = 1;
+        } else {
+            go = 0;
+        }
+    } while (go);
 
-// inicializarTerritorios():
-// Preenche os dados iniciais de cada território no mapa (nome, cor do exército, número de tropas).
-// Esta função modifica o mapa passado por referência (ponteiro).
+    do {
+        printf("Escolha o territorio defensor (1 a 5): ");
+        scanf("%d", &defensor);
+        limparBufferEntrada();
+        if (defensor < 1 || defensor > 6){
+            printf("Erro! Digite uma opção válida!\n");
+            go = 1;
+        } else {
+            go = 0;
+        }
 
-// liberarMemoria():
+    } while (go);
+
+    simularAtaque(atacante - 1, defensor - 1, &missao[0].totalVitorias);
+
+}
+
+
+// Executa a lógica de uma batalha entre dois territórios.
+// Realiza validações, rola os dados, compara os resultados e atualiza o número de tropas.
+// Se um território for conquistado, atualiza seu dono e move uma tropa.
+void simularAtaque(int at, int df, int *totalVitorias){
+    
+    int dado1 = (rand() % 6) + 1;
+    printf("Ataque (%s): %d ", war[at].nome, dado1);
+
+    int dado2 = (rand() % 6) + 1;
+    printf("| Defesa (%s): %d\n", war[df].nome, dado2);
+
+    if (dado1 > dado2) {
+        printf("VITORIA DO ATAQUE! O defensor perdeu 1 tropa.\n");
+        war[df].tropas--;
+        (*totalVitorias)++;
+
+        if (war[df].tropas == 0) {
+            printf("CONQUISTA! O território %s foi dominado pelo Exército %s\n", war[df].nome, war[at].cor);
+            strcpy(war[df].cor, war[at].cor);
+            war[df].tropas++;
+            if (war[at].tropas > 1){
+                war[at].tropas--;
+            }           
+        }
+
+    }
+
+    else if (dado1 < dado2) {
+        printf("ATAQUE NEUTRALIZADO! O defensor venceu essa batalha!");
+        war[at].tropas--;
+        *totalVitorias = 0;
+    }
+
+    else {
+        printf("EMPATE! Os exercitos não se confrontaram!");
+    }
+    pausa();
+}
+
+// Funções de setup e gerenciamento de memória:
+void limparBufferEntrada(){
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+// Funções de interface com o usuário:
+void pausa() {
+    printf("\nPressione ENTER para continuar...\n\n");
+    getchar();
+}
+
 // Libera a memória previamente alocada para o mapa usando free.
-
-
-
-
-// exibirMissao():
-// Exibe a descrição da missão atual do jogador com base no ID da missão sorteada.
-
-
-
-
-
-// sortearMissao():
-// Sorteia e retorna um ID de missão aleatório para o jogador.
-
-// verificarVitoria():
-// Verifica se o jogador cumpriu os requisitos de sua missão atual.
-// Implementa a lógica para cada tipo de missão (destruir um exército ou conquistar um número de territórios).
-// Retorna 1 (verdadeiro) se a missão foi cumprida, e 0 (falso) caso contrário.
-
+void liberarMemoria(struct Territorio *war, struct Mission *missao) {
+    free(war);
+    free(missao);
+}
 
